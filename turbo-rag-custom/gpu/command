@@ -1,0 +1,110 @@
+python turbo_rag_bench.py \
+  --model_name ./final_merged_qwen_rag \
+  --embedding_model_name sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir ./doc_emb \
+  --query_file ./questions/query.jsonl \
+  --num_questions 1 \
+  --similarity_top_k 5 \
+  --gen_tokens 16 \
+  --device cpu \
+  --torch_dtype fp32 \
+  --slow_tokenizer
+
+
+
+python turbo_rag_bench.py \
+  --model_name ./final_merged_smollm2_rag \
+  --embedding_model_name sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir ./smol_300_doc_emb \
+  --query_file ./questions/query.jsonl \
+  --num_questions 1 \
+  --similarity_top_k 5 \
+  --gen_tokens 16 \
+  --device cpu \
+  --torch_dtype fp32 \
+  --slow_tokenizer
+
+
+
+  python turbo_rag_bench.py \
+  --model_name ./final_merged_smollm2_rag \
+  --embedding_model_name sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir ./smol_300_doc_emb \
+  --query_file ./questions/query.jsonl \
+  --num_questions 1 \
+  --similarity_top_k 1 \
+  --gen_tokens 16 \
+  --device cpu \
+  --torch_dtype fp32 \
+  --slow_tokenizer
+
+
+python turbo_rag_interactive.py \
+  --model_name ./final_merged_smollm2_rag \
+  --embedding_model_name sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir ./smol_300_doc_emb \
+  --similarity_top_k 5 \
+  --gen_tokens 64 \
+  --device cpu \
+  --torch_dtype fp32 \
+  --mode both \
+  --slow_tokenizer
+
+
+
+python turbo_rag_interactive.py \
+  --model_name ./final_merged_smollm2_rag \
+  --embedding_model_name sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir ./smol_300_doc_emb \
+  --similarity_top_k 5 \
+  --gen_tokens 16 \
+  --device cpu \
+  --torch_dtype fp32 \
+  --mode kv \
+  --slow_tokenizer \
+  --print_top_n 5 \
+  --ctx_chars 800 \
+  --verbose_steps
+
+
+python build_numpy_index.py \
+  --docs_dir ./documents \
+  --out_dir ./rag_index_minilm_np \
+  --chunk_size 800 \
+  --overlap 120 \
+  --batch_size 32
+
+
+
+python ollama_rag_numpy.py \
+  --ollama_model smollm2:135m \
+  --index_dir ./rag_index_minilm_np \
+  --top_k 5 \
+  --num_ctx 4096 \
+  --num_predict 256 \
+  --print_ctx_chars 800
+
+
+
+
+
+
+python interactive_cpp_rag.py \
+  --model_path models/smollm_q4_k_m.gguf \
+  --embedding_model sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir doc_emb \
+  --n_ctx 2048
+
+
+python interactive_cpp_rag.py \
+  --model_path models/smollm_q4_k_m.gguf \
+  --embedding_model sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir doc_emb_random10 \
+  --n_ctx 4096
+
+
+  python interactive_cpp_rag.py \
+  --model_path models/smollm_q4_k_m.gguf \
+  --embedding_model sentence-transformers/all-MiniLM-L6-v2 \
+  --storage_dir doc_emb_random10_g5 \
+  --n_ctx 8192
