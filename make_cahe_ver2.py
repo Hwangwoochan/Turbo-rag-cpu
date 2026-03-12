@@ -7,7 +7,7 @@ from llama_index.core import Settings
 
 MODEL_PATH = "models/smollm_q4_k_m.gguf"
 DOCS_DIR = "documents"
-CACHE_DIR = "models/caches"
+CACHE_DIR = "caches"           # ← 여기 변경
 STORAGE_DIR = "doc_emb"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -35,7 +35,6 @@ def build_everything():
         with open(doc_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # 캐시 생성용 prefix를 명시적으로 고정
         prefix_text = PREFIX_TEMPLATE.format(doc=content)
 
         llm.reset()
@@ -43,6 +42,7 @@ def build_everything():
         llm.eval(prefix_tokens)
 
         state = llm.save_state()
+
         with open(cache_path, "wb") as f:
             pickle.dump(state, f)
 
@@ -54,6 +54,7 @@ def build_everything():
                 "prefix_template": PREFIX_TEMPLATE,
             }
         )
+
         all_documents.append(doc)
         print(f" -> 완료: {filename}")
 
@@ -62,6 +63,7 @@ def build_everything():
 
     print(f"[4/4] 인덱스 저장: {STORAGE_DIR}")
     index.storage_context.persist(persist_dir=STORAGE_DIR)
+
     print("\n[성공] 인덱싱과 캐시 생성이 모두 완료되었습니다.")
 
 if __name__ == "__main__":

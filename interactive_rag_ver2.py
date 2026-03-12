@@ -128,7 +128,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--storage_dir", type=str, default="doc_emb")
-    parser.add_argument("--embedding_model", type=str, default="BAAI/bge-small-en-v1.5")
+    parser.add_argument("--embedding_model", type=str, default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--top_k", type=int, default=1)
     parser.add_argument("--use_cache", action="store_true")
     parser.add_argument("--n_ctx", type=int, default=2048)
