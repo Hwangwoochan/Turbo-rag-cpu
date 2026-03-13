@@ -12,12 +12,14 @@ PREFIX_TEMPLATE = "Docs:\n{doc}\n\nQuestion:"
 NO_CACHE_FULL_TEMPLATE = "Docs:\n{doc}\n\nQuestion: {query}\nAnswer:"
 CACHE_SUFFIX_TEMPLATE = " {query}\nAnswer:"
 
+
 def build_retriever(storage_dir: str, embedding_model_name: str, top_k: int):
     print(f"[STEP] 리트리버 로딩 중... (모델: {embedding_model_name})")
     Settings.embed_model = HuggingFaceEmbedding(model_name=embedding_model_name)
     storage_context = StorageContext.from_defaults(persist_dir=storage_dir)
     index = load_index_from_storage(storage_context)
     return index.as_retriever(similarity_top_k=top_k)
+
 
 def run_interactive_rag(args):
     print(f"[STEP] LLM 로딩 중: {args.model_path}")
@@ -41,6 +43,9 @@ def run_interactive_rag(args):
             break
 
         stats = {}
+
+        # 전체 요청 시작 시각
+        t_request_start = time.perf_counter()
 
         # STEP 1: Retrieval
         t0 = time.perf_counter()
@@ -73,38 +78,60 @@ def run_interactive_rag(args):
 
         # STEP 3: Prompt Build
         if cache_loaded:
-            # 캐시 생성 시점 prefix 뒤에 suffix만 이어붙임
             prompt = CACHE_SUFFIX_TEMPLATE.format(query=query)
         else:
-            # 캐시가 없으면 전체 prompt를 처음부터 구성
             prompt = NO_CACHE_FULL_TEMPLATE.format(doc=best_node.text, query=query)
 
         tokens = llm.tokenize(prompt.encode("utf-8"))
 
         # STEP 4: Generation
         t_gen_start = time.perf_counter()
-        first_token_time = 0.0
+        first_token_timestamp = None
+        last_token_timestamp = None
+
         generated_text = ""
         token_count = 0
 
         for token in llm.generate(tokens, temp=args.temp):
+            now = time.perf_counter()
+
             if token_count == 0:
-                first_token_time = time.perf_counter() - t_gen_start
+                first_token_timestamp = now
 
             token_str = llm.detokenize([token]).decode("utf-8", errors="ignore")
             generated_text += token_str
             token_count += 1
+            last_token_timestamp = now
 
             if token_count >= args.max_tokens or token == llm.token_eos():
                 break
 
-        stats["ttft"] = first_token_time
-        stats["total_gen_time"] = time.perf_counter() - t_gen_start
-        stats["tpot"] = (
-            (stats["total_gen_time"] - stats["ttft"]) / (token_count - 1)
-            if token_count > 1 else 0.0
-        )
-        stats["total_e2e"] = time.perf_counter() - t0
+        t_request_end = time.perf_counter()
+
+        # ----- Metrics 계산 -----
+        # 1) 전체 파이프라인 기준 TTFT
+        if first_token_timestamp is not None:
+            stats["ttft"] = first_token_timestamp - t_request_start
+        else:
+            stats["ttft"] = 0.0
+
+        # 2) generate() 호출부터 마지막 토큰까지
+        stats["total_gen_time"] = t_request_end - t_gen_start
+
+        # 3) 첫 토큰 이후 마지막 토큰까지 시간
+        if first_token_timestamp is not None and last_token_timestamp is not None and token_count >= 2:
+            stats["first_to_last"] = last_token_timestamp - first_token_timestamp
+        else:
+            stats["first_to_last"] = 0.0
+
+        # 4) TPOT: 첫 토큰 이후 평균 토큰당 시간
+        if token_count > 1:
+            stats["tpot"] = stats["first_to_last"] / (token_count - 1)
+        else:
+            stats["tpot"] = 0.0
+
+        # 5) 전체 E2E
+        stats["total_e2e"] = t_request_end - t_request_start
 
         doc_token_count = len(llm.tokenize(best_node.text.encode("utf-8")))
 
@@ -112,23 +139,27 @@ def run_interactive_rag(args):
         print("\n" + "=" * 50)
         print(f"[*] 검색된 문서 파일: {best_node.metadata.get('file_name', 'N/A')}")
         print(f"[*] 검색된 문서 토큰 수: {doc_token_count}")
+        print(f"[*] 생성된 토큰 수: {token_count}")
         print(f"[*] 캐시 적용 여부: {'YES' if cache_loaded else 'NO'}")
 
         perf_data = [
             ["Retrieval", f"{stats['retrieval_time']:.4f}s"],
             ["Cache Load", f"{stats['cache_load_time']:.4f}s"],
-            ["TTFT (첫 토큰)", f"{stats['ttft']:.4f}s"],
-            ["TPOT (토큰당)", f"{stats['tpot']:.4f}s"],
+            ["TTFT", f"{stats['ttft']:.4f}s"],
+            ["TPOT", f"{stats['first_to_last']:.4f}s"],
+            ["Gen per tokens", f"{stats['tpot']:.4f}s/token"],
+            ["Gen Total (generate 전체)", f"{stats['total_gen_time']:.4f}s"],
             ["Total E2E", f"{stats['total_e2e']:.4f}s"],
         ]
         print(tabulate(perf_data, headers=["Phase", "Time"], tablefmt="simple"))
         print("=" * 50 + "\n")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, required=True)
     parser.add_argument("--storage_dir", type=str, default="doc_emb")
-    parser.add_argument("--embedding_model", type=str, default="sentence-transformers/all-MiniLM-L6-v2")
+    parser.add_argument("--embedding_model", type=str, default="BAAI/bge-small-en-v1.5")
     parser.add_argument("--top_k", type=int, default=1)
     parser.add_argument("--use_cache", action="store_true")
     parser.add_argument("--n_ctx", type=int, default=2048)
